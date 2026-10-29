@@ -1,0 +1,77 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/Memory.hdl
+
+/**
+ * The complete address space of the Hack computer's memory,
+ * including RAM and memory-mapped I/O. 
+ * The chip facilitates read and write operations, as follows:
+ *     Read:  out(t) = Memory[address(t)](t)
+ *     Write: if load(t-1) then Memory[address(t-1)](t) = in(t-1)
+ * In words: the chip always outputs the value stored at the memory 
+ * location specified by address. If load==1, the in value is loaded 
+ * into the memory location specified by address. This value becomes 
+ * available through the out output from the next time step onward.
+ * Address space rules:
+ * Only the upper 16K+8K+1 words of the Memory chip are used. 
+ * Access to address>0x6000 is invalid. Access to any address in 
+ * the range 0x4000-0x5FFF results in accessing the screen memory 
+ * map. Access to address 0x6000 results in accessing the keyboard 
+ * memory map. The behavior in these addresses is described in the 
+ * Screen and Keyboard chip specifications given in the book.
+ */
+
+CHIP Memory {
+    IN in[16], load, address[15];
+    OUT out[16];
+
+    PARTS:
+    // address[14] = 0：一般 RAM
+    // address[14] = 1：螢幕或鍵盤區域
+    DMux(
+        in=load,
+        sel=address[14],
+        a=loadRAM,
+        b=loadIO
+    );
+
+    // 在 I/O 區域中，address[13] = 0 才寫入螢幕
+    Not(in=address[13], out=notAddress13);
+    And(a=loadIO, b=notAddress13, out=loadScreen);
+
+    // 一般資料記憶體：16384 個 16-bit 儲存位置
+    RAM16K(
+        in=in,
+        load=loadRAM,
+        address=address[0..13],
+        out=ramOut
+    );
+
+    // 螢幕記憶體：8192 個 16-bit 儲存位置
+    Screen(
+        in=in,
+        load=loadScreen,
+        address=address[0..12],
+        out=screenOut
+    );
+
+    // 鍵盤只能讀取，不接收寫入訊號
+    Keyboard(out=keyboardOut);
+
+    // 選擇螢幕或鍵盤的讀取結果
+    Mux16(
+        a=screenOut,
+        b=keyboardOut,
+        sel=address[13],
+        out=ioOut
+    );
+
+    // 選擇一般 RAM 或 I/O 的讀取結果
+    Mux16(
+        a=ramOut,
+        b=ioOut,
+        sel=address[14],
+        out=out
+    );
+}
